@@ -505,6 +505,13 @@ def test_make_constant_already_a_constant():
     assert result is str_const
 
 
-def test_parsing_expression():
+def test_parsing_comparison_expression():
     patt_obj = stix2.create_pattern_object("[file:hashes.'SHA-256' = 'aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f']")
     assert str(patt_obj) == "[file:hashes.'SHA-256' = 'aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f']"
+
+
+def test_parsing_qualified_expression():
+    patt_obj = stix2.create_pattern_object(
+        "[network-traffic:dst_ref.type = 'domain-name' AND network-traffic:dst_ref.value = 'example.com'] REPEATS 5 TIMES WITHIN 1800 SECONDS")
+    assert str(
+        patt_obj) == "[network-traffic:dst_ref.type = 'domain-name' AND network-traffic:dst_ref.value = 'example.com'] REPEATS 5 TIMES WITHIN 1800 SECONDS"

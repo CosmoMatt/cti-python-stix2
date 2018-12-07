@@ -31,11 +31,13 @@ class StringConstant(_Constant):
     Args:
         value (str): string value
     """
-    def __init__(self, value):
+
+    def __init__(self, value, from_parse_tree=False):
+        self.needs_to_be_quoted = not from_parse_tree
         self.value = value
 
     def __str__(self):
-        return "'%s'" % escape_quotes_and_backslashes(self.value)
+        return "'%s'" % (escape_quotes_and_backslashes(self.value) if self.needs_to_be_quoted else self.value)
 
 
 class TimestampConstant(_Constant):
@@ -160,7 +162,13 @@ class BinaryConstant(_Constant):
     Args:
         value (str): base64 encoded string value
     """
-    def __init__(self, value):
+
+    def __init__(self, value, from_parse_tree=False):
+        # support with or without a 'b'
+        if from_parse_tree:
+            m = re.match("^b'(.+)'$", value)
+            if m:
+                value = m.group(1)
         try:
             base64.b64decode(value)
             self.value = value
@@ -177,10 +185,17 @@ class HexConstant(_Constant):
     Args:
         value (str): hexadecimal value
     """
-    def __init__(self, value):
-        if not re.match('^([a-fA-F0-9]{2})+$', value):
-            raise ValueError("must contain an even number of hexadecimal characters")
-        self.value = value
+
+    def __init__(self, value, from_parse_tree=False):
+        # support with or without an 'h'
+        if not from_parse_tree and re.match('^([a-fA-F0-9]{2})+$', value):
+            self.value = value
+        else:
+            m = re.match("^h'(([a-fA-F0-9]{2})+)'$", value)
+            if m:
+                self.value = m.group(1)
+            else:
+                raise ValueError("must contain an even number of hexadecimal characters")
 
     def __str__(self):
         return "h'%s'" % self.value
@@ -193,10 +208,11 @@ class ListConstant(_Constant):
         value (list): list of values
     """
     def __init__(self, values):
-        self.value = values
+        # handle _Constants or make a _Constant
+        self.value = [x if isinstance(x, _Constant) else make_constant(x) for x in values]
 
     def __str__(self):
-        return "(" + ", ".join([("%s" % make_constant(x)) for x in self.value]) + ")"
+        return "(" + ", ".join(["%s" % x for x in self.value]) + ")"
 
 
 def make_constant(value):

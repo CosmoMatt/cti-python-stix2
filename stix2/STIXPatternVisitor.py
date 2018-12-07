@@ -8,6 +8,7 @@ from stix2patterns.grammars.STIXPatternParser import (
 )
 from stix2patterns.grammars.STIXPatternVisitor import STIXPatternVisitor
 from stix2patterns.validator import STIXPatternErrorListener
+from stix2.patterns import _BooleanExpression
 
 from antlr4 import CommonTokenStream, InputStream
 
@@ -23,6 +24,13 @@ def collapse_lists(lists):
             result.append(c)
     return result
 
+
+def values_only(things):
+    values = []
+    for x in things:
+        if not isinstance(x, TerminalNode):
+            values.append(x)
+    return values
 
 
 
@@ -118,7 +126,11 @@ class STIXPatternVisitorForSTIX2(STIXPatternVisitor):
         if len(children) == 1:
             return children[0]
         else:
-            return self.instantiate("OrBooleanExpression", [children[0], children[2]])
+            if isinstance(children[0], _BooleanExpression):
+                children[0].operands.append(children[2])
+                return children[0]
+            else:
+                return self.instantiate("OrBooleanExpression", [children[0], children[2]])
 
     # Visit a parse tree produced by STIXPatternParser#comparisonExpressionAnd.
     def visitComparisonExpressionAnd(self, ctx):
@@ -127,57 +139,62 @@ class STIXPatternVisitorForSTIX2(STIXPatternVisitor):
         if len(children) == 1:
             return children[0]
         else:
-            return self.instantiate("AndBooleanExpression", [children[0], children[2]])
+            if isinstance(children[0], _BooleanExpression):
+                children[0].operands.append(children[2])
+                return children[0]
+            else:
+                return self.instantiate("AndBooleanExpression", [children[0], children[2]])
 
     # Visit a parse tree produced by STIXPatternParser#propTestEqual.
     def visitPropTestEqual(self, ctx):
         children = self.visitChildren(ctx)
-        if len(children) == 4:
-            operator = children[2].symbol.type
-            negated = negated = operator == STIXPatternParser.EQ
-            return self.instantiate("EqualityComparisonExpression", children[0], children[3], negated)
-        else:
-            operator = children[1].symbol.type
-            negated = negated = operator != STIXPatternParser.EQ
-            return self.instantiate("EqualityComparisonExpression", children[0], children[2], negated)
+        operator = children[1].symbol.type
+        negated = negated = operator != STIXPatternParser.EQ
+        return self.instantiate("EqualityComparisonExpression", children[0], children[3 if len(children) > 3 else 2],
+                                negated)
 
     # Visit a parse tree produced by STIXPatternParser#propTestOrder.
     def visitPropTestOrder(self, ctx):
         children = self.visitChildren(ctx)
         operator = children[1].symbol.type
         if operator == STIXPatternParser.GT:
-            return self.instantiate("GreaterThanComparisonExpression", children[0], children[2], False)
+            return self.instantiate("GreaterThanComparisonExpression", children[0],
+                                    children[3 if len(children) > 3 else 2], False)
         elif operator == STIXPatternParser.LT:
-            return self.instantiate("LessThanComparisonExpression", children[0], children[2], False)
+            return self.instantiate("LessThanComparisonExpression", children[0],
+                                    children[3 if len(children) > 3 else 2], False)
         elif operator == STIXPatternParser.GE:
-            return self.instantiate("GreaterThanEqualComparisonExpression", children[0], children[2], False)
+            return self.instantiate("GreaterThanEqualComparisonExpression", children[0],
+                                    children[3 if len(children) > 3 else 2], False)
         elif operator == STIXPatternParser.LE:
-            return self.instantiate("LessThanEqualComparisonExpression", children[0], children[2], False)
+            return self.instantiate("LessThanEqualComparisonExpression", children[0],
+                                    children[3 if len(children) > 3 else 2], False)
 
     # Visit a parse tree produced by STIXPatternParser#propTestSet.
     def visitPropTestSet(self, ctx):
-        # TODO
-        return self.visitChildren(ctx)
+        children = self.visitChildren(ctx)
+        return self.instantiate("InComparisonExpression", children[0], children[3 if len(children) > 3 else 2], False)
 
     # Visit a parse tree produced by STIXPatternParser#propTestLike.
     def visitPropTestLike(self, ctx):
         children = self.visitChildren(ctx)
-        return self.instantiate("LikeComparisonExpression", children[0], children[2], False)
+        return self.instantiate("LikeComparisonExpression", children[0], children[3 if len(children) > 3 else 2], False)
 
     # Visit a parse tree produced by STIXPatternParser#propTestRegex.
     def visitPropTestRegex(self, ctx):
         children = self.visitChildren(ctx)
-        return self.instantiate("MatchesComparisonExpression", children[0], children[2], False)
+        return self.instantiate("MatchesComparisonExpression", children[0], children[3 if len(children) > 3 else 2],
+                                False)
 
     # Visit a parse tree produced by STIXPatternParser#propTestIsSubset.
     def visitPropTestIsSubset(self, ctx):
         children = self.visitChildren(ctx)
-        return IsSubsetComparisonExpression(children[0], children[2])
+        return self.instantiate("IsSubsetComparisonExpression", children[0], children[3 if len(children) > 3 else 2])
 
     # Visit a parse tree produced by STIXPatternParser#propTestIsSuperset.
     def visitPropTestIsSuperset(self, ctx):
         children = self.visitChildren(ctx)
-        return IsSupersetComparisonExpression(children[0], children[2])
+        return self.instantiate("IsSupersetComparisonExpression", children[0], children[3 if len(children) > 3 else 2])
 
     # Visit a parse tree produced by STIXPatternParser#propTestParen.
     def visitPropTestParen(self, ctx):
@@ -253,7 +270,8 @@ class STIXPatternVisitorForSTIX2(STIXPatternVisitor):
 
     # Visit a parse tree produced by STIXPatternParser#setLiteral.
     def visitSetLiteral(self, ctx):
-        return self.visitChildren(ctx)
+        children = self.visitChildren(ctx)
+        return self.instantiate("ListConstant", values_only(children))
 
     # Visit a parse tree produced by STIXPatternParser#primitiveLiteral.
     def visitPrimitiveLiteral(self, ctx):
@@ -271,16 +289,15 @@ class STIXPatternVisitorForSTIX2(STIXPatternVisitor):
         elif node.symbol.type == STIXPatternParser.FloatPosLiteral or node.symbol.type == STIXPatternParser.FloatNegLiteral:
             return FloatConstant(node.getText())
         elif node.symbol.type == STIXPatternParser.HexLiteral:
-            return HexConstant(node.getText())
+            return HexConstant(node.getText(), from_parse_tree=True)
         elif node.symbol.type == STIXPatternParser.BinaryLiteral:
-            return BinaryConstant(node.getText())
+            return BinaryConstant(node.getText(), from_parse_tree=True)
         elif node.symbol.type == STIXPatternParser.StringLiteral:
-            return StringConstant(node.getText().strip('\''))
+            return StringConstant(node.getText().strip('\''), from_parse_tree=True)
         elif node.symbol.type == STIXPatternParser.BoolLiteral:
             return BooleanConstant(node.getText())
         elif node.symbol.type == STIXPatternParser.TimestampLiteral:
             return TimestampConstant(node.getText())
-        # TODO: timestamp
         else:
             return node
 
