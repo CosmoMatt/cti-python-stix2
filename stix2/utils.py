@@ -7,9 +7,10 @@ import json
 from dateutil import parser
 import pytz
 
-from .exceptions import (
-    InvalidValueError, RevokeError, UnmodifiablePropertyError,
-)
+import stix2.base
+
+from .exceptions import (InvalidValueError, RevokeError,
+                         UnmodifiablePropertyError)
 
 # Sentinel value for properties that should be set to the current time.
 # We can't use the standard 'default' approach, since if there are multiple
@@ -17,7 +18,7 @@ from .exceptions import (
 NOW = object()
 
 # STIX object properties that cannot be modified
-STIX_UNMOD_PROPERTIES = ['created', 'created_by_ref', 'id', 'type']
+STIX_UNMOD_PROPERTIES = ["created", "created_by_ref", "id", "type"]
 
 TYPE_REGEX = r'^\-?[a-z0-9]+(-[a-z0-9]+)*\-?$'
 
@@ -27,10 +28,8 @@ class STIXdatetime(dt.datetime):
         precision = kwargs.pop('precision', None)
         if isinstance(args[0], dt.datetime):  # Allow passing in a datetime object
             dttm = args[0]
-            args = (
-                dttm.year, dttm.month, dttm.day, dttm.hour, dttm.minute,
-                dttm.second, dttm.microsecond, dttm.tzinfo,
-            )
+            args = (dttm.year, dttm.month, dttm.day, dttm.hour, dttm.minute,
+                    dttm.second, dttm.microsecond, dttm.tzinfo)
         # self will be an instance of STIXdatetime, not dt.datetime
         self = dt.datetime.__new__(cls, *args, **kwargs)
         self.precision = precision
@@ -93,16 +92,16 @@ def format_datetime(dttm):
         zoned = pytz.utc.localize(dttm)
     else:
         zoned = dttm.astimezone(pytz.utc)
-    ts = zoned.strftime('%Y-%m-%dT%H:%M:%S')
-    ms = zoned.strftime('%f')
-    precision = getattr(dttm, 'precision', None)
+    ts = zoned.strftime("%Y-%m-%dT%H:%M:%S")
+    ms = zoned.strftime("%f")
+    precision = getattr(dttm, "precision", None)
     if precision == 'second':
-        pass  # Already precise to the second
-    elif precision == 'millisecond':
+        pass  # Alredy precise to the second
+    elif precision == "millisecond":
         ts = ts + '.' + ms[:3]
     elif zoned.microsecond > 0:
-        ts = ts + '.' + ms.rstrip('0')
-    return ts + 'Z'
+        ts = ts + '.' + ms.rstrip("0")
+    return ts + "Z"
 
 
 def parse_into_datetime(value, precision=None):
@@ -120,10 +119,8 @@ def parse_into_datetime(value, precision=None):
             parsed = parser.parse(value)
         except (TypeError, ValueError):
             # Unknown format
-            raise ValueError(
-                "must be a datetime object, date object, or "
-                "timestamp string in a recognizable format.",
-            )
+            raise ValueError("must be a datetime object, date object, or "
+                             "timestamp string in a recognizable format.")
         if parsed.tzinfo:
             ts = parsed.astimezone(pytz.utc)
         else:
@@ -175,12 +172,9 @@ def _find(seq, val):
     Search sequence 'seq' for val.  This behaves like str.find(): if not found,
     -1 is returned instead of throwing an exception.
 
-    Args:
-        seq: The sequence to search
-        val: The value to search for
-
-    Returns:
-        int: The index of the value if found, or -1 if not found
+    :param seq: The sequence to search
+    :param val: The value to search for
+    :return: The index of the value if found, or -1 if not found
     """
     try:
         return seq.index(val)
@@ -193,13 +187,10 @@ def _find_property_in_seq(seq, search_key, search_value):
     Helper for find_property_index(): search for the property in all elements
     of the given sequence.
 
-    Args:
-        seq: The sequence
-        search_key: Property name to find
-        search_value: Property value to find
-
-    Returns:
-        int: A property index, or -1 if the property was not found
+    :param seq: The sequence
+    :param search_key: Property name to find
+    :param search_value: Property value to find
+    :return: A property index, or -1 if the property was not found
     """
     idx = -1
     for elem in seq:
@@ -215,13 +206,10 @@ def find_property_index(obj, search_key, search_value):
     Search (recursively) for the given key and value in the given object.
     Return an index for the key, relative to whatever object it's found in.
 
-    Args:
-        obj: The object to search (list, dict, or stix object)
-        search_key: A search key
-        search_value: A search value
-
-    Returns:
-        int: An index; -1 if the key and value aren't found
+    :param obj: The object to search (list, dict, or stix object)
+    :param search_key: A search key
+    :param search_value: A search value
+    :return: An index; -1 if the key and value aren't found
     """
     from .base import _STIXBase
 
@@ -255,13 +243,11 @@ def new_version(data, **kwargs):
     """
 
     if not isinstance(data, Mapping):
-        raise ValueError(
-            "cannot create new version of object of this type! "
-            "Try a dictionary or instance of an SDO or SRO class.",
-        )
+        raise ValueError('cannot create new version of object of this type! '
+                         'Try a dictionary or instance of an SDO or SRO class.')
 
     unchangable_properties = []
-    if data.get('revoked'):
+    if data.get("revoked"):
         raise RevokeError("new_version")
     try:
         new_obj_inner = copy.deepcopy(data._inner)
@@ -283,12 +269,10 @@ def new_version(data, **kwargs):
         old_modified_property = parse_into_datetime(data.get('modified'), precision='millisecond')
         new_modified_property = parse_into_datetime(kwargs['modified'], precision='millisecond')
         if new_modified_property <= old_modified_property:
-            raise InvalidValueError(
-                cls, 'modified',
-                "The new modified datetime cannot be before than or equal to the current modified datetime."
-                "It cannot be equal, as according to STIX 2 specification, objects that are different "
-                "but have the same id and modified timestamp do not have defined consumer behavior.",
-            )
+            raise InvalidValueError(cls, 'modified',
+                                    "The new modified datetime cannot be before than or equal to the current modified datetime."
+                                    "It cannot be equal, as according to STIX 2 specification, objects that are different "
+                                    "but have the same id and modified timestamp do not have defined consumer behavior.")
     new_obj_inner.update(kwargs)
     # Exclude properties with a value of 'None' in case data is not an instance of a _STIXBase subclass
     return cls(**{k: v for k, v in new_obj_inner.items() if v is not None})
@@ -301,12 +285,10 @@ def revoke(data):
         A new version of the object with ``revoked`` set to ``True``.
     """
     if not isinstance(data, Mapping):
-        raise ValueError(
-            "cannot revoke object of this type! Try a dictionary "
-            "or instance of an SDO or SRO class.",
-        )
+        raise ValueError('cannot revoke object of this type! Try a dictionary '
+                         'or instance of an SDO or SRO class.')
 
-    if data.get('revoked'):
+    if data.get("revoked"):
         raise RevokeError("revoke")
     return new_version(data, revoked=True, allow_custom=True)
 
@@ -322,14 +304,14 @@ def get_class_hierarchy_names(obj):
 def remove_custom_stix(stix_obj):
     """Remove any custom STIX objects or properties.
 
-    Warnings:
-        This function is a best effort utility, in that it will remove custom
-        objects and properties based on the type names; i.e. if "x-" prefixes
-        object types, and "x\\_" prefixes property types. According to the
-        STIX2 spec, those naming conventions are a SHOULDs not MUSTs, meaning
-        that valid custom STIX content may ignore those conventions and in
-        effect render this utility function invalid when used on that STIX
-        content.
+    Warning: This function is a best effort utility, in that
+    it will remove custom objects and properties based on the
+    type names; i.e. if "x-" prefixes object types, and "x\\_"
+    prefixes property types. According to the STIX2 spec,
+    those naming conventions are a SHOULDs not MUSTs, meaning
+    that valid custom STIX content may ignore those conventions
+    and in effect render this utility function invalid when used
+    on that STIX content.
 
     Args:
         stix_obj (dict OR python-stix obj): a single python-stix object
@@ -339,13 +321,13 @@ def remove_custom_stix(stix_obj):
         A new version of the object with any custom content removed
     """
 
-    if stix_obj['type'].startswith('x-'):
+    if stix_obj["type"].startswith("x-"):
         # if entire object is custom, discard
         return None
 
     custom_props = []
     for prop in stix_obj.items():
-        if prop[0].startswith('x_'):
+        if prop[0].startswith("x_"):
             # for every custom property, record it and set value to None
             # (so we can pass it to new_version() and it will be dropped)
             custom_props.append((prop[0], None))
@@ -362,7 +344,7 @@ def remove_custom_stix(stix_obj):
         # existing STIX object) and the "modified" property. We dont supply the
         # "modified" property so that new_version() creates a new datetime
         # value for this property
-        non_supplied_props = STIX_UNMOD_PROPERTIES + ['modified']
+        non_supplied_props = STIX_UNMOD_PROPERTIES + ["modified"]
 
         props = [(prop, stix_obj[prop]) for prop in stix_obj if prop not in non_supplied_props]
 
@@ -371,7 +353,7 @@ def remove_custom_stix(stix_obj):
 
         new_obj = new_version(stix_obj, **(dict(props)))
 
-        while parse_into_datetime(new_obj['modified']) == parse_into_datetime(stix_obj['modified']):
+        while parse_into_datetime(new_obj["modified"]) == parse_into_datetime(stix_obj["modified"]):
             # Prevents bug when fast computation allows multiple STIX object
             # versions to be created in single unit of time
             new_obj = new_version(stix_obj, **(dict(props)))
@@ -384,3 +366,20 @@ def remove_custom_stix(stix_obj):
 
 def get_type_from_id(stix_id):
     return stix_id.split('--', 1)[0]
+
+
+def is_marking(obj_or_id):
+    """Determines whether the given object or object ID is/is for a marking
+    definition.
+
+    :param obj_or_id: A STIX object or object ID as a string.
+    :return: True if a marking definition, False otherwise.
+    """
+
+    if isinstance(obj_or_id, (stix2.base._STIXBase, dict)):
+        result = obj_or_id["type"] == "marking-definition"
+    else:
+        # it's a string ID
+        result = obj_or_id.startswith("marking-definition--")
+
+    return result

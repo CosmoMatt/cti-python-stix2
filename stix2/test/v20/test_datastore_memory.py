@@ -3,112 +3,111 @@ import shutil
 
 import pytest
 
-from stix2 import Filter, MemorySource, MemoryStore, properties
+from stix2 import (Bundle, Campaign, CustomObject, Filter, Identity, Indicator,
+                   Malware, MemorySource, MemoryStore, Relationship,
+                   properties)
 from stix2.datastore import make_id
-from stix2.v20 import (
-    Bundle, Campaign, CustomObject, Identity, Indicator, Malware, Relationship,
-)
+from stix2.utils import parse_into_datetime
 
-from .constants import (
-    CAMPAIGN_ID, CAMPAIGN_KWARGS, IDENTITY_ID, IDENTITY_KWARGS, INDICATOR_ID,
-    INDICATOR_KWARGS, MALWARE_ID, MALWARE_KWARGS, RELATIONSHIP_IDS,
-)
+from .constants import (CAMPAIGN_ID, CAMPAIGN_KWARGS, IDENTITY_ID,
+                        IDENTITY_KWARGS, INDICATOR_ID, INDICATOR_KWARGS,
+                        MALWARE_ID, MALWARE_KWARGS, RELATIONSHIP_IDS)
 
 IND1 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000001",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-27T13:49:53.935Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 IND2 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000001",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-27T13:49:53.935Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 IND3 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000001",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-27T13:49:53.936Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 IND4 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000002",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-27T13:49:53.935Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 IND5 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000002",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-27T13:49:53.935Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 IND6 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000001",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-31T13:49:53.935Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 IND7 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000002",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-27T13:49:53.935Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 IND8 = {
     "created": "2017-01-27T13:49:53.935Z",
     "id": "indicator--00000000-0000-4000-8000-000000000002",
     "labels": [
-        "url-watchlist",
+        "url-watchlist"
     ],
     "modified": "2017-01-27T13:49:53.935Z",
     "name": "Malicious site hosting downloader",
     "pattern": "[url:value = 'http://x4z9arb.cn/4712']",
     "type": "indicator",
-    "valid_from": "2017-01-27T13:49:53.935382Z",
+    "valid_from": "2017-01-27T13:49:53.935382Z"
 }
 
 STIX_OBJS2 = [IND6, IND7, IND8]
@@ -163,15 +162,13 @@ def test_memory_source_get_nonexistant_object(mem_source):
 
 def test_memory_store_all_versions(mem_store):
     # Add bundle of items to sink
-    mem_store.add(dict(
-        id="bundle--%s" % make_id(),
-        objects=STIX_OBJS2,
-        spec_version="2.0",
-        type="bundle",
-    ))
+    mem_store.add(dict(id="bundle--%s" % make_id(),
+                  objects=STIX_OBJS2,
+                  spec_version="2.0",
+                  type="bundle"))
 
     resp = mem_store.all_versions("indicator--00000000-0000-4000-8000-000000000001")
-    assert len(resp) == 1  # MemoryStore can only store 1 version of each object
+    assert len(resp) == 3
 
 
 def test_memory_store_query(mem_store):
@@ -183,25 +180,27 @@ def test_memory_store_query(mem_store):
 def test_memory_store_query_single_filter(mem_store):
     query = Filter('id', '=', 'indicator--00000000-0000-4000-8000-000000000001')
     resp = mem_store.query(query)
-    assert len(resp) == 1
+    assert len(resp) == 2
 
 
 def test_memory_store_query_empty_query(mem_store):
     resp = mem_store.query()
     # sort since returned in random order
-    resp = sorted(resp, key=lambda k: k['id'])
-    assert len(resp) == 2
+    resp = sorted(resp, key=lambda k: (k['id'], k['modified']))
+    assert len(resp) == 3
     assert resp[0]['id'] == 'indicator--00000000-0000-4000-8000-000000000001'
-    assert resp[0]['modified'] == '2017-01-27T13:49:53.936Z'
-    assert resp[1]['id'] == 'indicator--00000000-0000-4000-8000-000000000002'
-    assert resp[1]['modified'] == '2017-01-27T13:49:53.935Z'
+    assert resp[0]['modified'] == parse_into_datetime('2017-01-27T13:49:53.935Z')
+    assert resp[1]['id'] == 'indicator--00000000-0000-4000-8000-000000000001'
+    assert resp[1]['modified'] == parse_into_datetime('2017-01-27T13:49:53.936Z')
+    assert resp[2]['id'] == 'indicator--00000000-0000-4000-8000-000000000002'
+    assert resp[2]['modified'] == parse_into_datetime('2017-01-27T13:49:53.935Z')
 
 
 def test_memory_store_query_multiple_filters(mem_store):
     mem_store.source.filters.add(Filter('type', '=', 'indicator'))
     query = Filter('id', '=', 'indicator--00000000-0000-4000-8000-000000000001')
     resp = mem_store.query(query)
-    assert len(resp) == 1
+    assert len(resp) == 2
 
 
 def test_memory_store_save_load_file(mem_store, fs_mem_store):
@@ -222,23 +221,17 @@ def test_memory_store_save_load_file(mem_store, fs_mem_store):
 
 def test_memory_store_add_invalid_object(mem_store):
     ind = ('indicator', IND1)  # tuple isn't valid
-    with pytest.raises(TypeError) as excinfo:
+    with pytest.raises(TypeError):
         mem_store.add(ind)
-    assert 'stix_data expected to be' in str(excinfo.value)
-    assert 'a python-stix2 object' in str(excinfo.value)
-    assert 'JSON formatted STIX' in str(excinfo.value)
-    assert 'JSON formatted STIX bundle' in str(excinfo.value)
 
 
 def test_memory_store_object_with_custom_property(mem_store):
-    camp = Campaign(
-        name="Scipio Africanus",
-        objective="Defeat the Carthaginians",
-        x_empire="Roman",
-        allow_custom=True,
-    )
+    camp = Campaign(name="Scipio Africanus",
+                    objective="Defeat the Carthaginians",
+                    x_empire="Roman",
+                    allow_custom=True)
 
-    mem_store.add(camp)
+    mem_store.add(camp, True)
 
     camp_r = mem_store.get(camp.id)
     assert camp_r.id == camp.id
@@ -246,12 +239,10 @@ def test_memory_store_object_with_custom_property(mem_store):
 
 
 def test_memory_store_object_with_custom_property_in_bundle(mem_store):
-    camp = Campaign(
-        name="Scipio Africanus",
-        objective="Defeat the Carthaginians",
-        x_empire="Roman",
-        allow_custom=True,
-    )
+    camp = Campaign(name="Scipio Africanus",
+                    objective="Defeat the Carthaginians",
+                    x_empire="Roman",
+                    allow_custom=True)
 
     bundle = Bundle(camp, allow_custom=True)
     mem_store.add(bundle)
@@ -262,16 +253,14 @@ def test_memory_store_object_with_custom_property_in_bundle(mem_store):
 
 
 def test_memory_store_custom_object(mem_store):
-    @CustomObject(
-        'x-new-obj', [
-            ('property1', properties.StringProperty(required=True)),
-        ],
-    )
+    @CustomObject('x-new-obj', [
+        ('property1', properties.StringProperty(required=True)),
+    ])
     class NewObj():
         pass
 
     newobj = NewObj(property1='something')
-    mem_store.add(newobj)
+    mem_store.add(newobj, True)
 
     newobj_r = mem_store.get(newobj.id)
     assert newobj_r.id == newobj.id

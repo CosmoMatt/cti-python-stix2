@@ -1,20 +1,21 @@
-"""Filters for Python STIX 2.0 DataSources, DataSinks, DataStores"""
+"""
+Filters for Python STIX 2.0 DataSources, DataSinks, DataStores
+
+"""
 
 import collections
 from datetime import datetime
 
-from stix2.utils import format_datetime
+import six
+
+import stix2.utils
 
 """Supported filter operations"""
 FILTER_OPS = ['=', '!=', 'in', '>', '<', '>=', '<=', 'contains']
 
 """Supported filter value types"""
-FILTER_VALUE_TYPES = [bool, dict, float, int, list, str, tuple]
-try:
-    FILTER_VALUE_TYPES.append(unicode)
-except NameError:
-    # Python 3 doesn't need to worry about unicode
-    pass
+FILTER_VALUE_TYPES = (bool, dict, float, int, list, tuple, six.string_types,
+                      datetime)
 
 
 def _check_filter_components(prop, op, value):
@@ -33,18 +34,18 @@ def _check_filter_components(prop, op, value):
         # check filter operator is supported
         raise ValueError("Filter operator '%s' not supported for specified property: '%s'" % (op, prop))
 
-    if type(value) not in FILTER_VALUE_TYPES:
+    if not isinstance(value, FILTER_VALUE_TYPES):
         # check filter value type is supported
         raise TypeError("Filter value of '%s' is not supported. The type must be a Python immutable type or dictionary" % type(value))
 
-    if prop == 'type' and '_' in value:
+    if prop == "type" and "_" in value:
         # check filter where the property is type, value (type name) cannot have underscores
         raise ValueError("Filter for property 'type' cannot have its value '%s' include underscores" % value)
 
     return True
 
 
-class Filter(collections.namedtuple('Filter', ['property', 'op', 'value'])):
+class Filter(collections.namedtuple("Filter", ['property', 'op', 'value'])):
     """STIX 2 filters that support the querying functionality of STIX 2
     DataStores and DataSources.
 
@@ -66,10 +67,6 @@ class Filter(collections.namedtuple('Filter', ['property', 'op', 'value'])):
         if isinstance(value, list):
             value = tuple(value)
 
-        if isinstance(value, datetime):
-            # if value is a datetime obj, convert to str
-            value = format_datetime(value)
-
         _check_filter_components(prop, op, value)
 
         self = super(Filter, cls).__new__(cls, prop, op, value)
@@ -85,31 +82,33 @@ class Filter(collections.namedtuple('Filter', ['property', 'op', 'value'])):
             True if property matches the filter,
             False otherwise.
         """
-        if isinstance(stix_obj_property, datetime):
-            # if a datetime obj, convert to str format before comparison
-            # NOTE: this check seems like it should be done upstream
-            # but will put here for now
-            stix_obj_property = format_datetime(stix_obj_property)
+        # If filtering on a timestamp property and the filter value is a string,
+        # try to convert the filter value to a datetime instance.
+        if isinstance(stix_obj_property, datetime) and \
+                isinstance(self.value, six.string_types):
+            filter_value = stix2.utils.parse_into_datetime(self.value)
+        else:
+            filter_value = self.value
 
-        if self.op == '=':
-            return stix_obj_property == self.value
-        elif self.op == '!=':
-            return stix_obj_property != self.value
-        elif self.op == 'in':
-            return stix_obj_property in self.value
-        elif self.op == 'contains':
-            if isinstance(self.value, dict):
-                return self.value in stix_obj_property.values()
+        if self.op == "=":
+            return stix_obj_property == filter_value
+        elif self.op == "!=":
+            return stix_obj_property != filter_value
+        elif self.op == "in":
+            return stix_obj_property in filter_value
+        elif self.op == "contains":
+            if isinstance(filter_value, dict):
+                return filter_value in stix_obj_property.values()
             else:
-                return self.value in stix_obj_property
-        elif self.op == '>':
-            return stix_obj_property > self.value
-        elif self.op == '<':
-            return stix_obj_property < self.value
-        elif self.op == '>=':
-            return stix_obj_property >= self.value
-        elif self.op == '<=':
-            return stix_obj_property <= self.value
+                return filter_value in stix_obj_property
+        elif self.op == ">":
+            return stix_obj_property > filter_value
+        elif self.op == "<":
+            return stix_obj_property < filter_value
+        elif self.op == ">=":
+            return stix_obj_property >= filter_value
+        elif self.op == "<=":
+            return stix_obj_property <= filter_value
         else:
             raise ValueError("Filter operator: {0} not supported for specified property: {1}".format(self.op, self.property))
 
@@ -120,8 +119,11 @@ def apply_common_filters(stix_objs, query):
     Supports only STIX 2.0 common property properties.
 
     Args:
-        stix_objs (list): list of STIX objects to apply the query to
-        query (set): set of filters (combined form complete query)
+        stix_objs (iterable): iterable of STIX objects to apply the query to
+        query (non-iterator iterable): iterable of filters.  Can't be an
+            iterator (e.g. generator iterators won't work), since this is
+            used in an inner loop of a nested loop.  So we require the ability
+            to traverse the filters repeatedly.
 
     Yields:
         STIX objects that successfully evaluate against the query.
@@ -155,7 +157,7 @@ def _check_filter(filter_, stix_obj):
     """
     # For properties like granular_markings and external_references
     # need to extract the first property from the string.
-    prop = filter_.property.split('.')[0]
+    prop = filter_.property.split(".")[0]
 
     if prop not in stix_obj.keys():
         # check filter "property" is in STIX object - if cant be
@@ -163,9 +165,9 @@ def _check_filter(filter_, stix_obj):
         # (i.e. did not make it through the filter)
         return False
 
-    if '.' in filter_.property:
+    if "." in filter_.property:
         # Check embedded properties, from e.g. granular_markings or external_references
-        sub_property = filter_.property.split('.', 1)[1]
+        sub_property = filter_.property.split(".", 1)[1]
         sub_filter = filter_._replace(property=sub_property)
 
         if isinstance(stix_obj[prop], list):
